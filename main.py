@@ -5,11 +5,11 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, MessageHandler, CallbackQueryHandler, CommandHandler, filters, ContextTypes
 import yt_dlp
 
-# --- Render Web Server (Port ဖွင့်ရန်) ---
+# --- Render အတွက် Web Server (Bot အိပ်မပျော်စေရန်) ---
 app = Flask('')
 @app.route('/')
 def home(): 
-    return "Bot is alive!"
+    return "Bot is alive and running!"
 
 def run(): 
     port = int(os.environ.get("PORT", 10000))
@@ -18,7 +18,7 @@ def run():
 def keep_alive(): 
     threading.Thread(target=run).start()
 
-# --- Bot Configuration ---
+# --- Telegram Bot Configuration ---
 TOKEN = '8514502979:AAGemVEqrs6BaaMM6iawm-A0vN8AJsCVXGk'
 
 async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -50,16 +50,15 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.edit_message_text(text=" ဒေါင်းလုဒ်ဆွဲနေပါပြီ... ခဏစောင့်ပါ။")
     
-    # ဖိုင်သိမ်းမည့် အမည်
     file_path = f"{video_id}.mp3"
     
-    # FFmpeg လမ်းကြောင်းကို Render ပေါ်မူတည်၍ သတ်မှတ်ခြင်း
-    ffmpeg_path = os.path.join(os.getcwd(), 'ffmpeg/bin')
+    # FFmpeg နေရာ အတိအကျကို ညွှန်ပြခြင်း (Render build shell အရ)
+    ffmpeg_bin_path = os.path.join(os.getcwd(), 'ffmpeg', 'bin', 'ffmpeg')
     
     ydl_opts = {
         'format': 'bestaudio/best',
-        'outtmpl': video_id, # extension မပါဘဲ သိမ်းရန်
-        'ffmpeg_location': ffmpeg_path,
+        'outtmpl': video_id,
+        'ffmpeg_location': ffmpeg_bin_path, # လမ်းကြောင်း အသေညွှန်ထားသည်
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -81,17 +80,18 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
     except Exception as e:
         print(f"Error: {e}")
-        await query.message.reply_text(" အမှားအယွင်းရှိလို့ ပြန်ကြိုးစားကြည့်ပါ။ (FFmpeg သွင်းထားတာ မှန်မမှန် ပြန်စစ်ပါ)")
+        await query.message.reply_text(" အမှားအယွင်းရှိလို့ ပြန်ကြိုးစားကြည့်ပါ။ (FFmpeg လမ်းကြောင်း မှားနေနိုင်ပါသည်)")
 
 def main():
+    # Bot အဟောင်းတွေနဲ့ မငြိအောင် drop_pending_updates သုံးထားသည်
     app_tg = Application.builder().token(TOKEN).build()
     app_tg.add_handler(CommandHandler("start", handle_start))
     app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app_tg.add_handler(CallbackQueryHandler(handle_button))
     
-    print("Bot is starting...")
+    print("Bot is starting polling...")
     app_tg.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
-    keep_alive()
-    main()
+    keep_alive() # Web server ဖွင့်ခြင်း
+    main()       # Bot ဖွင့်ခြင်း
