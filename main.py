@@ -1,8 +1,25 @@
 import os
+import threading
+from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import yt_dlp
 
+# --- Render အတွက် Port ဖွင့်ပေးရန် (Flask) ---
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+def run():
+    app.run(host='0.0.0.0', port=10000)
+
+def keep_alive():
+    t = threading.Thread(target=run)
+    t.start()
+
+# --- Telegram Bot Code ---
 TOKEN = '8514502979:AAGemVEqrs6BaaMM6iawm-A0vN8AJsCVXGk'
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -50,10 +67,12 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("အမှားအယွင်းရှိလို့ ပြန်ကြိုးစားကြည့်ပါ။")
 
 def main():
-    app = Application.builder().token(TOKEN).build()
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.add_handler(CallbackQueryHandler(handle_button))
-    app.run_polling()
+    app_tg = Application.builder().token(TOKEN).build()
+    app_tg.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app_tg.add_handler(CallbackQueryHandler(handle_button))
+    print("Bot is starting...")
+    app_tg.run_polling()
 
 if __name__ == '__main__':
-    main()
+    keep_alive() # Render Port ကို စတင်ဖွင့်ခြင်း
+    main() # Telegram Bot ကို စတင်ဖွင့်ခြင်း
