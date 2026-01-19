@@ -5,7 +5,7 @@ from telegram.ext import Application, MessageHandler, CallbackQueryHandler, Comm
 
 app = Flask('')
 @app.route('/')
-def home(): return "Bot is Live with Cookies!"
+def home(): return "Zwe Bot is running with Fixes!"
 def run(): app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
 def keep_alive(): threading.Thread(target=run, daemon=True).start()
 
@@ -27,14 +27,14 @@ async def handle_message(update, context):
         results = await search_yt(query)
         kb = [[InlineKeyboardButton(e['title'][:50], callback_data=f"sel|{e['id']}")] for e in results]
         await msg.edit_text(" ရလဒ်များ -", reply_markup=InlineKeyboardMarkup(kb))
-    except: await msg.edit_text(" Cookie အမှားအယွင်းရှိနေသည်။")
+    except: await msg.edit_text(" ရှာမရပါ။ Cookie Format မှားနေပုံရပါတယ်။")
 
 async def handle_button(update, context):
     query = update.callback_query
     await query.answer()
     data = query.data.split("|")
     
-    if data[0] == "back": # နောက်သို့ ခလုတ်
+    if data[0] == "back": # Back button logic
         last_q = context.user_data.get('last_q')
         results = await search_yt(last_q)
         kb = [[InlineKeyboardButton(e['title'][:50], callback_data=f"sel|{e['id']}")] for e in results]
@@ -48,9 +48,14 @@ async def handle_button(update, context):
         await query.edit_message_text("Format ရွေးပါ-", reply_markup=InlineKeyboardMarkup(kb))
         return
 
-    await query.edit_message_text(" ဒေါင်းလုဒ်ဆွဲနေပါပြီ...")
+    await query.edit_message_text(" ဒေါင်းလုဒ်ဆွဲနေပါပြီ... ခဏစောင့်ပါ။")
     ext = 'mp3' if data[0] == 'mp3' else 'mp4'
-    opts = {'format': 'bestaudio/best' if data[0] == 'mp3' else 'best', 'outtmpl': vid, 'cookiefile': 'cookies.txt'}
+    opts = {
+        'format': 'bestaudio/best' if data[0] == 'mp3' else 'best', 
+        'outtmpl': vid, 
+        'cookiefile': 'cookies.txt',
+        'nocheckcertificate': True
+    }
     if data[0] == 'mp3': opts['postprocessors'] = [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3'}]
     
     try:
@@ -59,7 +64,7 @@ async def handle_button(update, context):
             if data[0] == 'mp3': await query.message.reply_audio(audio=f)
             else: await query.message.reply_video(video=f)
         os.remove(f"{vid}.{ext}")
-    except: await query.message.reply_text(" ဒေါင်းမရပါ။ Cookie သက်တမ်းကုန်နေပြီ။")
+    except: await query.message.reply_text(" ဒေါင်းမရပါ။ YouTube က Render IP ကို ပိတ်ထားတာ ဖြစ်နိုင်ပါတယ်။")
 
 def main():
     application = Application.builder().token(TOKEN).build()
