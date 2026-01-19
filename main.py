@@ -1,4 +1,4 @@
-import os, threading, requests, yt_dlp
+import os, threading, requests
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, MessageHandler, CallbackQueryHandler, CommandHandler, filters, ContextTypes
@@ -11,77 +11,58 @@ def keep_alive(): threading.Thread(target=run, daemon=True).start()
 
 TOKEN = os.environ.get('BOT_TOKEN')
 
-async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(" Zwe Music & Video Downloader!\nသီချင်းနာမည် ပို့ပေးပါ။")
-
 async def search_yt(query):
-    # Cookie မပါဘဲ yt-dlp နဲ့ တိုက်ရိုက်ရှာမယ်
-    ydl_opts = {'quiet': True, 'noplaylist': True, 'extract_flat': True}
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        return ydl.extract_info(f"ytsearch5:{query}", download=False)['entries']
+    # YouTube Block တာကျော်ဖို့ Piped API သုံးပြီး ရှာဖွေမယ်
+    try:
+        r = requests.get(f"https://pipedapi.kavin.rocks/search?q={query}&filter=all", timeout=10).json()
+        return [i for i in r['items'] if i['type'] == 'stream'][:5]
+    except: return []
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_start(update, context):
+    await update.message.reply_text("👋 Zwe Music Downloader!\nသီချင်းနာမည် ပို့ပေးပါ။")
+
+async def handle_message(update, context):
     query = update.message.text
     context.user_data['last_q'] = query
-    msg = await update.message.reply_text(" ရှာဖွေနေပါတယ်...")
-    try:
-        results = await search_yt(query)
-        kb = [[InlineKeyboardButton(e['title'][:50], callback_data=f"sel|{e['id']}")] for e in results]
-        await msg.edit_text(" ရလဒ်များ -", reply_markup=InlineKeyboardMarkup(kb))
-    except:
-        await msg.edit_text(" ရှာဖွေမှု အဆင်မပြေပါ။ ခဏနေမှ ပြန်စမ်းပါ။")
+    msg = await update.message.reply_text("🔍 ရှာဖွေနေပါတယ်...")
+    results = await search_yt(query)
+    if not results:
+        await msg.edit_text("❌ ရှာမတွေ့ပါ။ နောက်တစ်ကြိမ် ပြန်စမ်းပါ။")
+        return
+    kb = [[InlineKeyboardButton(e['title'][:50], callback_data=f"sel|{e['url'].split('=')[-1]}")] for e in results]
+    await msg.edit_text("🎵 ရလဒ်များ -", reply_markup=InlineKeyboardMarkup(kb))
 
-async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_button(update, context):
     query = update.callback_query
     await query.answer()
     data = query.data.split("|")
-    action = data[0]
-
-    if action == "back":
+    if data[0] == "back": # နောက်သို့ ခလုတ်
         last_q = context.user_data.get('last_q')
-        if last_q:
-            results = await search_yt(last_q)
-            kb = [[InlineKeyboardButton(e['title'][:50], callback_data=f"sel|{e['id']}")] for e in results]
-            await query.edit_message_text(" ရလဒ်များ -", reply_markup=InlineKeyboardMarkup(kb))
+        results = await search_yt(last_q)
+        kb = [[InlineKeyboardButton(e['title'][:50], callback_data=f"sel|{e['url'].split('=')[-1]}")] for e in results]
+        await query.edit_message_text("🎵 ရလဒ်များ -", reply_markup=InlineKeyboardMarkup(kb))
         return
-
     vid = data[1]
-    if action == "sel":
-        kb = [
-            [InlineKeyboardButton(" MP3", callback_data=f"mp3|{vid}"), InlineKeyboardButton(" MP4", callback_data=f"mp4|{vid}")],
-            [InlineKeyboardButton(" နောက်သို့", callback_data="back")]
-        ]
+    if data[0] == "sel":
+        kb = [[InlineKeyboardButton("🎵 MP3", callback_data=f"mp3|{vid}"), InlineKeyboardButton("🎥 MP4", callback_data=f"mp4|{vid}")],
+              [InlineKeyboardButton("⬅️ နောက်သို့", callback_data="back")]]
         await query.edit_message_text("Format ရွေးပါ-", reply_markup=InlineKeyboardMarkup(kb))
         return
-
-    await query.edit_message_text(" ဒေါင်းလုဒ်ဆွဲနေပါပြီ... ခဏစောင့်ပါ။")
-    
-    # YouTube က ပိတ်ထားရင် Cobalt API နဲ့ ပြောင်းဒေါင်းမယ်
+    await query.edit_message_text("📥 ဒေါင်းလုဒ်ဆွဲနေပါပြီ...")
     api_url = "https://api.cobalt.tools/api/json"
-    payload = {
-        "url": f"https://www.youtube.com/watch?v={vid}",
-        "downloadMode": "audio" if action == "mp3" else "video",
-        "videoQuality": "720"
-    }
-    
+    payload = {"url": f"https://www.youtube.com/watch?v={vid}", "downloadMode": "audio" if data[0] == "mp3" else "video"}
     try:
-        r = requests.post(api_url, json=payload, headers={"Accept": "application/json"}).json()
-        if r.get("status") in ["stream", "redirect"]:
-            file_url = r.get("url")
-            file_name = f"{vid}.{'mp3' if action == 'mp3' else 'mp4'}"
-            
-            with requests.get(file_url, stream=True) as res:
-                with open(file_name, 'wb') as f:
-                    for chunk in res.iter_content(chunk_size=1024*1024): f.write(chunk)
-            
-            with open(file_name, 'rb') as f:
-                if action == "mp3": await query.message.reply_audio(audio=f)
-                else: await query.message.reply_video(video=f)
-            os.remove(file_name)
-        else:
-            await query.message.reply_text(" ဒေါင်းလုဒ်မရပါ။ တစ်ခြားတစ်ပုဒ် စမ်းကြည့်ပါ။")
-    except:
-        await query.message.reply_text(" Server အလုပ်မလုပ်ပါ။")
+        res = requests.post(api_url, json=payload, headers={"Accept": "application/json"}).json()
+        file_url = res.get("url")
+        file_name = f"{vid}.{'mp3' if data[0] == 'mp3' else 'mp4'}"
+        with requests.get(file_url, stream=True) as r:
+            with open(file_name, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=1024*1024): f.write(chunk)
+        with open(file_name, 'rb') as f:
+            if data[0] == 'mp3': await query.message.reply_audio(audio=f)
+            else: await query.message.reply_video(video=f)
+        os.remove(file_name)
+    except: await query.message.reply_text("❌ ဒေါင်းမရပါ။ Server Error ဖြစ်နေပါတယ်။")
 
 def main():
     application = Application.builder().token(TOKEN).build()
